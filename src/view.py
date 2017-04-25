@@ -9,6 +9,17 @@ import pyqtgraph as pg
 
 from argparse import ArgumentParser
 
+def debug_trace():
+  '''Set a tracepoint in the Python debugger that works with Qt'''
+  from PyQt4.QtCore import pyqtRemoveInputHook
+
+  # Or for Qt5
+  #from PyQt5.QtCore import pyqtRemoveInputHook
+
+  from pdb import set_trace
+  pyqtRemoveInputHook()
+  set_trace()
+
 class image_stack:
     stack=None
     curr_image=0
@@ -86,14 +97,19 @@ class viewer(pg.GraphicsLayoutWidget):
 
     def initUI(self):
         self.setWindowTitle('CTBB Image Viewer');
+        #self.plot_window=self.addViewBox()
         self.plot_window = self.addPlot()
-        
+        #
         self.plot_window.hideAxis('left');
         self.plot_window.hideAxis('bottom');
         self.plot_window.invertY();
         self.plot_window.invertX();
 
         self.img_obj = pg.ImageItem()
+        self.img_obj.setParent(self.plot_window)
+
+        print(self.img_obj.parent())
+        
         self.img_obj.aspectLocked=True;
         self.plot_window.addItem(self.img_obj)
 
@@ -154,8 +170,11 @@ class viewer(pg.GraphicsLayoutWidget):
 
     def add_roi(self):
         from roi import roi
-        test=roi.frominteractive(self)
-    
+        #test=roi.frominteractive(self)
+        test=roi.fromfile('/home/john/Code/CTBangBang_Pipeline_Analysis/src/sample_roi.ctbbroi',self)
+        test=roi.ellipse(self)
+        test=roi.rectangle(self)
+
 def main():
     app=QtGui.QApplication(sys.argv)
 

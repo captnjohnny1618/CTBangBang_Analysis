@@ -1,0 +1,13 @@
+# This is actually just a yaml file despite the weird extension
+roi_name: background
+shape: ellipse
+position: [256,256]
+size: [32,128]
+experiment_id: screening
+date_added: 2017-04-25 09:29:55.697713
+last_modified: 2017-04-25 09:30:45.040800
+
+mean: []
+median: []
+area: []
+  
