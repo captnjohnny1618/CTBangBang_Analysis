@@ -9,16 +9,7 @@ import pyqtgraph as pg
 
 from argparse import ArgumentParser
 
-def debug_trace():
-  '''Set a tracepoint in the Python debugger that works with Qt'''
-  from PyQt4.QtCore import pyqtRemoveInputHook
-
-  # Or for Qt5
-  #from PyQt5.QtCore import pyqtRemoveInputHook
-
-  from pdb import set_trace
-  pyqtRemoveInputHook()
-  set_trace()
+from roi import roi
 
 class image_stack:
     stack=None
@@ -28,6 +19,8 @@ class image_stack:
     height=512
     study_dirpath=None
     img_filepath=None
+
+    #python3 ~/Code/CTBangBang_Pipeline_Analysis/src/view.py /Fast_Storage/RSNA_2017/library/recon/100/15fb037a6279308801f10570c5f3f2c1_k2_st0.6/w
 
     def __init__(self,study_dirpath,width,height,offset):
         print('offset: ' + str(offset));
@@ -39,8 +32,6 @@ class image_stack:
 
         # Set up paths to files
         self.study_dirpath=os.path.abspath(study_dirpath)
-
-        print(os.path.basename(self.study_dirpath))
 
         fileparts=os.path.basename(self.study_dirpath)
         fileparts=fileparts.split("_")
@@ -56,9 +47,10 @@ class image_stack:
 
             f.seek(offset,os.SEEK_SET);
             self.stack=np.fromfile(f,'float32')
-            print(self.stack.size)
 
-        self.stack=self.stack.reshape(self.stack.size/(self.width*self.height),self.width,self.height);
+        n_slices=self.stack.size/(self.width*self.height)
+
+        self.stack=self.stack.reshape(int(n_slices),self.width,self.height);
         self.stack=1000*(self.stack-0.01923)/(0.01923)
         stack_size=self.stack.shape
         self.n_images=stack_size[0];
@@ -82,9 +74,10 @@ class viewer(pg.GraphicsLayoutWidget):
     plot_window=None;
     img_obj=None;
     hist_obj=None;
+    rois=[]
 
-    window=1000;
-    level=0;
+    window=1600;
+    level=-600;
     
     is_windowing=False;
     is_playing=False;
@@ -94,33 +87,49 @@ class viewer(pg.GraphicsLayoutWidget):
         self.app=app
         self.stack=stack;
         self.initUI()
+        self.load_saved_rois()
+        self.update_image()
 
     def initUI(self):
-        self.setWindowTitle('CTBB Image Viewer');
-        #self.plot_window=self.addViewBox()
-        self.plot_window = self.addPlot()
-        #
-        self.plot_window.hideAxis('left');
-        self.plot_window.hideAxis('bottom');
+        self.setWindowTitle('CTBB Image Viewer');        
+        self.plot_window=self.addViewBox()
+        #self.plot_window = self.addPlot()
+        ##
+        #self.plot_window.hideAxis('left');
+        #self.plot_window.hideAxis('bottom');
         self.plot_window.invertY();
         self.plot_window.invertX();
-
+        #
         self.img_obj = pg.ImageItem()
         self.img_obj.setParent(self.plot_window)
-
-        print(self.img_obj.parent())
-        
+        #
         self.img_obj.aspectLocked=True;
         self.plot_window.addItem(self.img_obj)
 
         self.img_obj.setImage(self.stack[0],levels=(self.level-self.window/2,self.level+self.window/2))
-        
+
         self.resize(512, 512)
+        self.img_obj.show()
         self.show()
 
+    def load_saved_rois(self):
+        roi_dir=os.path.join(self.stack.study_dirpath,'qi_raw')
+        files=os.listdir(roi_dir)
+        for f in files:
+            if os.path.splitext(f)[1]=='.ctbbroi':
+                self.rois.append(roi.fromfile(os.path.join(roi_dir,f),self))
+
     def update_image(self):
+        # Handle image data
         self.img_obj.setImage(self.stack[self.stack.curr_image],levels=(self.level-self.window/2,self.level+self.window/2))
         self.app.processEvents()
+
+        # Set ROI visibility
+        for r in self.rois:
+            if r.slice_number[0]==self.stack.curr_image:
+                r.gui_roi_handle.show()
+            else:
+                r.gui_roi_handle.hide()
 
     def play(self):
         while self.is_playing and self.stack.curr_image<=self.stack.n_images-1:
@@ -169,12 +178,16 @@ class viewer(pg.GraphicsLayoutWidget):
             self.removeItem(self.hist_obj);
 
     def add_roi(self):
-        from roi import roi
-        #test=roi.frominteractive(self)
-        test=roi.fromfile('/home/john/Code/CTBangBang_Pipeline_Analysis/src/sample_roi.ctbbroi',self)
-        test=roi.ellipse(self)
-        test=roi.rectangle(self)
+        self.rois.append(roi.ellipse(self))
 
+    def hide_show_roi(self):
+        if self.shown:
+            self.rois[0].gui_roi_handle.hide()
+        else:
+            self.rois[0].gui_roi_handle.show()
+
+        self.shown=1-self.shown
+ 
 def main():
     app=QtGui.QApplication(sys.argv)
 
@@ -203,3 +216,6 @@ def main():
 
 if __name__=="__main__":
     main();
+      
+        
+  
