@@ -26,6 +26,7 @@ def pos_vector_convert(pos,size,direction):
 class roi:
     ## Properties
     # ROI
+    roi_name     = None
     roi_shape    = None # ellipse or rect to start
     slice_number = None
                            
@@ -33,6 +34,7 @@ class roi:
     experiment_id = None
     date_added    = None
     last_modified = None
+    prm_dict      = None
                            
     # GUI                  
     gui_roi_handle     = None
@@ -67,18 +69,20 @@ class roi:
         viewer_obj.plot_window.addItem(self.gui_roi_handle)
         
         # Map metadata into instance
+        self.roi_name=roi_info['roi_name']
         self.date_added=roi_info['date_added']
         self.last_modified=roi_info['last_modified']
         self.roi_shape=roi_shape
         self.slice_number=roi_info['slice']
+        self.prm_dict=viewer_obj.stack.prm_dict
 
         # Add textbox
-        text="Name: {}\nPos: {}\nMean:{}".format("butts","more_butts","the most butts")
-        self.gui_infobox_handle=pg.TextItem(text=text)
-        self.gui_infobox_handle.show()
-        print(dir(self.gui_infobox_handle))
-        
-        
+        self.gui_infobox_handle=pg.LabelItem(text="")        
+        viewer_obj.plot_window.addItem(self.gui_infobox_handle)
+        self.set_info_box()
+
+        #print(dir(self.gui_infobox_handle))
+
         # Add callbacks
         self.gui_roi_handle.setAcceptedMouseButtons(QtCore.Qt.LeftButton)
         self.gui_roi_handle.sigClicked.connect(self.moved)
@@ -87,7 +91,6 @@ class roi:
 
         self.add_to_context_menu('Save ROI',self.save)
 
-
     @classmethod
     def ellipse(cls,viewer_obj):
         study_dirpath=viewer_obj.stack.study_dirpath
@@ -95,6 +98,7 @@ class roi:
         roi_shape='ellipse'
 
         roi_info={}
+        roi_info['roi_name']='new_roi'
         roi_info['slice']=[viewer_obj.stack.curr_image]
         roi_info['position']=[256,256]
         roi_info['size']=[32,32]
@@ -111,6 +115,7 @@ class roi:
         roi_shape='rect'
 
         roi_info={}
+        roi_info['roi_name']='new_roi'        
         roi_info['slice']=[viewer_obj.stack.curr_image]
         roi_info['position']=[256,256]
         roi_info['size']=[32,32]
@@ -147,8 +152,23 @@ class roi:
     def __del__(self):
         pass
 
+    def set_info_box(self):
+        n=self.roi_name
+        p=self.get_pos()
+        m=float(self.__get_mean__())
+        sd=float(self.__get_sd__())
+
+        size=self.get_size()
+        
+        text="Name: {}<br>Pos: ({:.2f},{:.2f})<br>Mean: {:.2f}<br>SD: {:.2f}".format(n,p[0],p[1],m,sd)
+
+        self.gui_infobox_handle.setText(text,color='0000FF',size='5pt')
+        self.gui_infobox_handle.setPos(p[0]+size[0],p[1]+size[1])
+        
     # Callbacks
+
     def moved(self):
+        self.set_info_box()
         self.last_modified=str(datetime.now())
 
     # Store/remove/validate methods
@@ -160,8 +180,7 @@ class roi:
         # Ask user for identifier
         items=("background","healthy_tissue","damaged_tissue","aorta")
         
-        item, ok = QtGui.QInputDialog.getItem(self.gui_viewer_handle, "select input dialog", 
-                                        "ROI Type", items, 0, False)
+        item, ok = QtGui.QInputDialog.getItem(self.gui_viewer_handle, "select input dialog","ROI Type", items, 0, False)
 
         if not ok:
             return
@@ -178,7 +197,7 @@ class roi:
         save_dict['last_modified'] = self.last_modified
 
         save_dict['mean'] = stats['mean']
-        save_dict['standard_dev']= stats['sd']
+        save_dict['sd']= stats['sd']
         save_dict['median'] = stats['median']
         save_dict['area'] = stats['area']
 
@@ -215,38 +234,62 @@ class roi:
 
     def hide(self):
         self.gui_roi_handle.hide()
+        self.gui_infobox_handle.hide()
 
     def show(self):
         self.gui_roi_handle.show()
+        self.gui_infobox_handle.show()        
 
     # "Info" methods
     def get_statistics(self):
         stats={}
         stats['mean']=float(self.__get_mean__())
         stats['sd']=float(self.__get_sd__())
-        stats['median']=self.__get_median__()
-        stats['area']=self.__get_area__()
+        stats['median']=float(self.__get_median__())
+        stats['area']=float(self.__get_area__())
         return stats
 
     def __get_mean__(self):
         curr_slice=self.gui_viewer_handle.stack.curr_image
-        data=self.gui_roi_handle.getArrayRegion(self.gui_viewer_handle.stack.stack[curr_slice,:,:],self.gui_viewer_handle.img_obj,axes=[0,1])
-        return data.mean()
+        curr_image=np.squeeze(self.gui_viewer_handle.stack.stack[curr_slice,:,:])
+        data=self.gui_roi_handle.getArrayRegion(curr_image,self.gui_viewer_handle.img_obj,axes=[0,1])
+        return np.mean(data[data.nonzero()])
 
     def __get_sd__(self):
         curr_slice=self.gui_viewer_handle.stack.curr_image
-        data=self.gui_roi_handle.getArrayRegion(self.gui_viewer_handle.stack.stack[curr_slice,:,:],self.gui_viewer_handle.img_obj,axes=[0,1])
-        return data.std()
+        curr_image=np.squeeze(self.gui_viewer_handle.stack.stack[curr_slice,:,:])
+        data=self.gui_roi_handle.getArrayRegion(curr_image,self.gui_viewer_handle.img_obj,axes=[0,1])
+        return np.std(data[data.nonzero()],ddof=1)
 
     def __get_median__(self):
-        print()        
+        curr_slice=self.gui_viewer_handle.stack.curr_image
+        curr_image=np.squeeze(self.gui_viewer_handle.stack.stack[curr_slice,:,:])
+        data=self.gui_roi_handle.getArrayRegion(curr_image,self.gui_viewer_handle.img_obj,axes=[0,1])
+        return np.median(data[data.nonzero()])
 
     def __get_area__(self):
-        print()        
+        curr_slice=self.gui_viewer_handle.stack.curr_image
+        curr_image=np.squeeze(self.gui_viewer_handle.stack.stack[curr_slice,:,:])
+        data=self.gui_roi_handle.getArrayRegion(curr_image,self.gui_viewer_handle.img_obj,axes=[0,1])
+        data=data.nonzero()
+        numel=len(data[0])        
+        pixel_area=self.prm_dict['ReconFOV']/self.prm_dict['Nx']*self.prm_dict['ReconFOV']/self.prm_dict['Ny']
+
+        if pixel_area:
+            area=numel*pixel_area
+        else:
+            area=0
+
+        return area
         
     def get_position(self):
         return (list(self.gui_roi_handle.pos()),list(self.gui_roi_handle.size()))
+
+    def get_pos(self):
+        return tuple(self.gui_roi_handle.pos())
         
+    def get_size(self):
+        return tuple(self.gui_roi_handle.size())
 
     def set_position(self,pos,size):
         new_pos=pos_vector_convert(pos,size,'center->corner')

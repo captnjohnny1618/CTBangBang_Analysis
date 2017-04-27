@@ -2,6 +2,7 @@
 import os
 import sys
 import time
+import yaml
 
 import numpy as np
 from pyqtgraph.Qt import QtCore, QtGui
@@ -11,6 +12,16 @@ from argparse import ArgumentParser
 
 from roi import roi
 
+def load_prm(prm_filepath):
+    # Clean up the file and then load
+    with open(prm_filepath,'r') as f:
+        data=f.read()
+        data=data.replace("\t"," ")
+        data=data.replace("\%","#")
+        prm_dict=yaml.load(data)
+
+    return prm_dict
+
 class image_stack:
     stack=None
     curr_image=0
@@ -19,6 +30,9 @@ class image_stack:
     height=512
     study_dirpath=None
     img_filepath=None
+    prm_filepath=None
+    
+    prm_dict=None
 
     #python3 ~/Code/CTBangBang_Pipeline_Analysis/src/view.py /Fast_Storage/RSNA_2017/library/recon/100/15fb037a6279308801f10570c5f3f2c1_k2_st0.6/w
 
@@ -41,6 +55,10 @@ class image_stack:
         dose=os.path.basename(os.path.dirname(self.study_dirpath))
         
         self.img_filepath=os.path.join(self.study_dirpath,'img',"_".join([pipeline_id,'d'+dose,kernel,slice_thickness])+'.img')
+        self.prm_filepath=os.path.join(self.study_dirpath,'img',"_".join([pipeline_id,'d'+dose,kernel,slice_thickness])+'.prm')
+
+        # Grab parameter file
+        self.prm_dict=load_prm(self.prm_filepath)
 
         # Read in image stack a prep for display
         with open(self.img_filepath,'r') as f:
@@ -98,7 +116,7 @@ class viewer(pg.GraphicsLayoutWidget):
         #self.plot_window.hideAxis('left');
         #self.plot_window.hideAxis('bottom');
         self.plot_window.invertY();
-        self.plot_window.invertX();
+        #self.plot_window.invertX();
         #
         self.img_obj = pg.ImageItem()
         self.img_obj.setParent(self.plot_window)
@@ -127,9 +145,11 @@ class viewer(pg.GraphicsLayoutWidget):
         # Set ROI visibility
         for r in self.rois:
             if r.slice_number[0]==self.stack.curr_image:
-                r.gui_roi_handle.show()
+                r.show()
+                #r.gui_roi_handle.show()
             else:
-                r.gui_roi_handle.hide()
+                r.hide()
+                #r.gui_roi_handle.hide()
 
     def play(self):
         while self.is_playing and self.stack.curr_image<=self.stack.n_images-1:
